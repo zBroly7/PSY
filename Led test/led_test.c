@@ -95,7 +95,7 @@ static run_led_test(void *testArgs)
 		    return (TEST_FAIL);
 		}
 
-		C55x_delay_msec(LED_BLINK_DELAY);
+		C55x_delay_msec(100);
 
 		/* Write 1 to output pin */
 		status = GPIO_write(gpioObject, CSL_GPIO_PIN16, 0);
@@ -113,7 +113,7 @@ static run_led_test(void *testArgs)
 		    return (TEST_FAIL);
 		}
 
-		C55x_delay_msec(LED_BLINK_DELAY);
+		C55x_delay_msec(1000);
 
 		/* Write 1 to output pin */
 		status = GPIO_write(gpioObject, CSL_GPIO_PIN17, 0);
@@ -134,7 +134,7 @@ static run_led_test(void *testArgs)
 		    return (TEST_FAIL);
 		}
 
-		C55x_delay_msec(LED_BLINK_DELAY);
+		C55x_delay_msec(1500);
 
 		/* Write 1 to output pin */
 		status = GPIO_write(gpioObject, CSL_GPIO_PIN28, 0);

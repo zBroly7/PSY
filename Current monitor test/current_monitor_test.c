@@ -4,11 +4,13 @@
 *    current and power for all the four slave devices.
 *
 */
-
 #include "current_monitor_test.h"
+
+
 
 CSL_I2cSetup     i2cSetup;
 CSL_I2cConfig    i2cConfig;
+CSL_GpioObj    *gpioObject;
 
 /**
  *  \brief    This function is used to writting to INA219 device
@@ -108,6 +110,12 @@ static TEST_STATUS run_current_monitor_test(void *testArgs)
 	Uint16  regRdBuf;
 	Uint16  looper;
 
+    CSL_Status           status;
+    CSL_GpioPinConfig    config;
+    Uint16               times;
+    Uint8                c = 0;
+    CSL_GpioObj *gpioObj = (CSL_GpioObj *)testArgs;
+
 	/* Initialize I2C module */
 	retVal = I2C_init(CSL_I2C0);
 	if(retVal != CSL_SOK)
@@ -132,480 +140,1091 @@ static TEST_STATUS run_current_monitor_test(void *testArgs)
 		C55x_msgWrite("I2C Setup Failed!!\n\r");
 		return (TEST_FAIL);
 	}
+    times = 10;
 
-	regAddr   = 0x0000;/*Configuration register address*/
-	writeBuff = 0x3f9f;/*Configuration register data*/
-	retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the configuration register of the slave "
-				      "address 0x%x is failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
+    /* Enable clocks to all peripherals */
+    CSL_SYSCTRL_REGS->PCGCR1 = 0x0000;
+    CSL_SYSCTRL_REGS->PCGCR2 = 0x0000;
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
+    C55x_msgWrite("\n\rCheck if all three LED's on the BoosterPack are toggling\n\r");
 
-	regAddr   = 0x0005;/*Calibration register address*/
-	writeBuff = 0x6C41;/*Calibration register data*/
-	retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the calibration register of the slave "
-				      "address 0x%x is failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
+    CSL_FINST(CSL_SYSCTRL_REGS->EBSR, SYS_EBSR_PPMODE, MODE6);
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
+    /* Open GPIO module */
+    gpioObject = GPIO_open(gpioObj, &status);
+    if((NULL == gpioObject) || (CSL_SOK != status))
+    {
+        C55x_msgWrite("GPIO_open failed\n\r");
+        return (TEST_FAIL);
+    }
 
-	C55x_msgWrite("Reading values from CVDD port\n\r");
+    /* Reset all the pins */
+    GPIO_reset(gpioObject);
 
-	regAddr = 0x0001;/*Shunt voltage reg address*/
-	retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+	/* Configure GPIO pin 16 as output pin */
+	    config.pinNum    = CSL_GPIO_PIN16;
+	    config.direction = CSL_GPIO_DIR_OUTPUT;
+	    config.trigger   = CSL_GPIO_TRIG_CLEAR_EDGE;
 
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the shunt voltage register of the slave "
-				      "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf & 0x7fff;
-		readRegData = readRegData * 0.01;
-		C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
-	}
+	    status = GPIO_configBit(gpioObject, &config);
+	    if(CSL_SOK != status)
+	    {
+	        C55x_msgWrite("GPIO_configBit failed\n\r");
+	        return (TEST_FAIL);
+	    }
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
+	    /* Configure GPIO pin 17 as output pin */
+	    config.pinNum    = CSL_GPIO_PIN17;
+	    config.direction = CSL_GPIO_DIR_OUTPUT;
+	    config.trigger   = CSL_GPIO_TRIG_CLEAR_EDGE;
 
-	regAddr = 0x0002;/*Bus voltage reg address*/
-	retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the bus voltage register of the slave"
-				     " address - 0x%x is failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData =  regRdBuf >> 3;
-		readRegData = readRegData * 0.004;
-		C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
-	}
+	    status = GPIO_configBit(gpioObject, &config);
+	    if(CSL_SOK != status)
+	    {
+	        C55x_msgWrite("GPIO_configBit failed\n\r");
+	        return (TEST_FAIL);
+	    }
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0003;/*Power Reg addr*/
-	retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading power from the slave address 0x%x is "
-				      "failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf;
-		readRegData = current_lsb[0] * 20 * readRegData;
-		C55x_msgWrite("Power - %fmW\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0004;/*Current Reg addr*/
-	retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);;
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading current from the slave address 0x%x is "
-				      "failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		regRdBuf = regRdBuf & 0x7fff;
-		readRegData = regRdBuf;
-		readRegData = current_lsb[0] * readRegData;
-		C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr   = 0x0000;/*Configuration register address*/
-	writeBuff = 0x3F9F;/*Configuration register data*/
-	retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x is "
-				      "failed\n\r", LDOI_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr   = 0x0005;/*Calibration register address*/
-	writeBuff = 0x596C;/*Calibration register data*/
-
-	retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the calibration register of the  slave address 0x%x is "
-				      "failed\n\r", LDOI_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	C55x_msgWrite("Reading values from LDOI port\n\r");
-
-	regAddr = 0x0001;/*Shunt voltage reg address*/
-	retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the shunt voltage register of the slave address - 0x%x is "
-				      "failed\n\r", LDOI_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf & 0x7fff;
-		readRegData = readRegData * 0.01;
-		C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0002;/*Bus voltage reg address*/
-	retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
-
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the bus voltage register of the slave "
-				      "address - 0x%x is failed\n\r", LDOI_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData =  regRdBuf >> 3;
-		readRegData = readRegData * 0.004;
-		C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0003;/*Power Reg addr*/
-	retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading power from the slave address "
-				      "0x%x is failed\n\r", LDOI_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf;
-		readRegData = current_lsb[1] * 20 * readRegData;
-		C55x_msgWrite("Power - %fmW\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x04;/*Current Reg addr*/
-	retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading current from the slave address 0x%x is "
-				      "failed\n\r");
-		return (TEST_FAIL);
-	}
-	else
-	{
-		regRdBuf = regRdBuf & 0x7fff;
-		readRegData = regRdBuf;
-		readRegData = current_lsb[1] * readRegData;
-		C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr   = 0x0000;/*Configuration register address*/
-	writeBuff = 0x3F9F;/*Configuration register data*/
-	retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the configuration register of the slave "
-				      "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr    = 0x0005;/*Calibration register address*/
-	writeBuff = 0xBF7F;/*Calibration register data*/
-	retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the calibration register of the slave "
-				      "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	C55x_msgWrite("Reading values from DSP_DVDDIO port\n\r");
-
-	regAddr = 0x0001;/*Shunt voltage reg address*/
-	retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
-
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the shunt voltage register of the slave "
-				      "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf & 0x7fff;
-		readRegData = readRegData * 0.01;
-		C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0002;/*Bus voltage reg address*/
-	retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the bus voltage register of the slave "
-				      "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData =  regRdBuf >> 3;
-		readRegData = readRegData * 0.004;
-		C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x00003;/*Power Reg addr*/
-	retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading power from the slave address 0x%x is "
-				      "failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf;
-		readRegData = current_lsb[2] * 20 * readRegData * 2;
-		C55x_msgWrite("Power - %fmW\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0004;/*Current Reg addr*/
-	retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading current from the slave address 0x%x is "
-				      "failed\n\r", DSP_DVDDIO_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf;
-		readRegData = current_lsb[2] * readRegData * 2;
-		C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr = 0x0000;/*Configuration register address*/
-	writeBuff = 0x3F9F;/*Configuration register data*/
-	retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x "
-				      "is failed\n\r", VCC3V3_USB_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	regAddr   = 0x0005;/*Calibration register address*/
-	writeBuff = 0x93C5;/*Calibration register data*/
-	retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Writing to the calibration register of the slave "
-				      "address 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
-		return (TEST_FAIL);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
-
-	C55x_msgWrite("Reading values from VCC3V3_USB port\n\r");
-
-	regAddr = 0x0001;/*Shunt voltage reg address*/
-	retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the shunt voltage register of the slave "
-				      "address - 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf & 0x7fff;
-		readRegData = readRegData * 0.01;
-		C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
-	}
-
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
+	    /* Configure GPIO pin 28 as output pin */
+	    config.pinNum    = CSL_GPIO_PIN28;
+	    config.direction = CSL_GPIO_DIR_OUTPUT;
+	    config.trigger   = CSL_GPIO_TRIG_CLEAR_EDGE;
 
 
-	regAddr = 0x0002;/*Bus voltage reg address*/
-	retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != 0)
-	{
-		C55x_msgWrite("Reading from the bus voltage register of the slave "
-				      "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData =  regRdBuf >> 3;
-		readRegData = readRegData * 0.004;
-		C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
-	}
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
 
-	regAddr = 0x0003;/*Power Reg addr*/
-	retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading power from the slave address "
-				      "0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		readRegData = regRdBuf;
-		readRegData = current_lsb[3] * 20 * readRegData * 2;
-		C55x_msgWrite("Power - %fmW\n\r", readRegData);
-	}
 
-	/* Give some delay */
-	for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
-	{
-		asm("	nop");
-	}
+	times = 1;
+    while(1)
+        {
 
-	regAddr = 0x0004;/*Current Reg addr*/
-	retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
-	if(retVal != CSL_SOK)
-	{
-		C55x_msgWrite("Reading current from the slave address 0x%x "
-				      "is failed\n\r", VCC3V3_USB_SlaveAddr);
-		return (TEST_FAIL);
-	}
-	else
-	{
-		regRdBuf = regRdBuf & 0x7fff;
-		readRegData = regRdBuf;
-		readRegData = current_lsb[3] * readRegData * 2;
-		C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
-	}
+        C55x_msgWrite("!!!!!!!!!!ZAPALANIE LEDOW!!!!!!\n\r");
+
+            /* Write 1 to output pin */
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN16, 1);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            /* Write 1 to output pin */
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN17, 1);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            /* Set Bus for GPIOs */
+            CSL_FINST(CSL_SYSCTRL_REGS->EBSR, SYS_EBSR_PPMODE, MODE2);
+
+            /* Write 1 to output pin */
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN28, 1);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            CSL_FINST(CSL_SYSCTRL_REGS->EBSR, SYS_EBSR_PPMODE, MODE6);
+
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3f9f;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the slave "
+                              "address 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x6C41;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from CVDD port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave"
+                             " address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address 0x%x is "
+                              "failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[0] * 20 * readRegData;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);;
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[0] * readRegData;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x596C;/*Calibration register data*/
+
+            retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the  slave address 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from LDOI port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave address - 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address "
+                              "0x%x is failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[1] * 20 * readRegData;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x04;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r");
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[1] * readRegData;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the slave "
+                              "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr    = 0x0005;/*Calibration register address*/
+            writeBuff = 0xBF7F;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from DSP_DVDDIO port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x00003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address 0x%x is "
+                              "failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[2] * 20 * readRegData * 2;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[2] * readRegData * 2;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x "
+                              "is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x93C5;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from VCC3V3_USB port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address "
+                              "0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[3] * 20 * readRegData * 2;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x "
+                              "is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[3] * readRegData * 2;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+            C55x_delay_msec(5000);
+
+            /* Write 1 to output pin */
+            C55x_msgWrite("!!!!!!!!!!GASZENIE LEDOW!!!!!!\n\r");
+
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN16, 0);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            /* Write 1 to output pin */
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN17, 0);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            /* Set Bus for GPIOs */
+            CSL_FINST(CSL_SYSCTRL_REGS->EBSR, SYS_EBSR_PPMODE, MODE2);
+
+            /* Write 1 to output pin */
+            status = GPIO_write(gpioObject, CSL_GPIO_PIN28, 0);
+            if(CSL_SOK != status)
+            {
+                C55x_msgWrite("GPIO_write Failed\n\r");
+                return (TEST_FAIL);
+            }
+
+
+
+            CSL_FINST(CSL_SYSCTRL_REGS->EBSR, SYS_EBSR_PPMODE, MODE6);
+
+
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3f9f;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the slave "
+                              "address 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x6C41;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(CVDD_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from CVDD port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave"
+                             " address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address 0x%x is "
+                              "failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[0] * 20 * readRegData;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(CVDD_SlaveAddr, regAddr, &regRdBuf, 2);;
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[0] * readRegData;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x596C;/*Calibration register data*/
+
+            retVal = write_to_ina_device_reg(LDOI_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the  slave address 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from LDOI port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave address - 0x%x is "
+                              "failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address "
+                              "0x%x is failed\n\r", LDOI_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[1] * 20 * readRegData;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x04;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(LDOI_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r");
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[1] * readRegData;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the slave "
+                              "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr    = 0x0005;/*Calibration register address*/
+            writeBuff = 0xBF7F;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from DSP_DVDDIO port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x00003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address 0x%x is "
+                              "failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[2] * 20 * readRegData * 2;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(DSP_DVDDIO_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x is "
+                              "failed\n\r", DSP_DVDDIO_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[2] * readRegData * 2;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0000;/*Configuration register address*/
+            writeBuff = 0x3F9F;/*Configuration register data*/
+            retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the configuration register of the  slave address 0x%x "
+                              "is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr   = 0x0005;/*Calibration register address*/
+            writeBuff = 0x93C5;/*Calibration register data*/
+            retVal = write_to_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &writeBuff);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Writing to the calibration register of the slave "
+                              "address 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            C55x_msgWrite("Reading values from VCC3V3_USB port\n\r");
+
+            regAddr = 0x0001;/*Shunt voltage reg address*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the shunt voltage register of the slave "
+                              "address - 0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf & 0x7fff;
+                readRegData = readRegData * 0.01;
+                C55x_msgWrite("Shunt voltage - %fmV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+
+            regAddr = 0x0002;/*Bus voltage reg address*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != 0)
+            {
+                C55x_msgWrite("Reading from the bus voltage register of the slave "
+                              "address - 0x%x is failed\n\r", CVDD_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData =  regRdBuf >> 3;
+                readRegData = readRegData * 0.004;
+                C55x_msgWrite("Bus voltage - %fV\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0003;/*Power Reg addr*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading power from the slave address "
+                              "0x%x is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                readRegData = regRdBuf;
+                readRegData = current_lsb[3] * 20 * readRegData * 2;
+                C55x_msgWrite("Power - %fmW\n\r", readRegData);
+            }
+
+            /* Give some delay */
+            for(looper = 0; looper < CSL_I2C_MAX_TIMEOUT; looper++)
+            {
+                asm("   nop");
+            }
+
+            regAddr = 0x0004;/*Current Reg addr*/
+            retVal = read_from_ina_device_reg(VCC3V3_USB_SlaveAddr, regAddr, &regRdBuf, 2);
+            if(retVal != CSL_SOK)
+            {
+                C55x_msgWrite("Reading current from the slave address 0x%x "
+                              "is failed\n\r", VCC3V3_USB_SlaveAddr);
+                return (TEST_FAIL);
+            }
+            else
+            {
+                regRdBuf = regRdBuf & 0x7fff;
+                readRegData = regRdBuf;
+                readRegData = current_lsb[3] * readRegData * 2;
+                C55x_msgWrite("Current - %fmA\n\n\r", readRegData);
+            }
+            C55x_delay_msec(5000);
+        }
 
 	return (TEST_PASS);
 

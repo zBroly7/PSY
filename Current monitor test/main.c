@@ -11,7 +11,8 @@
 int main(void)
 {
 	Int16  retVal;
-	void *testArgs 	= NULL;
+	//void *testArgs 	= NULL;
+    CSL_GpioObj   testArgs;
 
 	/* Initialize the platform */
 	retVal = initPlatform();
@@ -21,7 +22,7 @@ int main(void)
 		return (-1);
 	}
 
-	retVal = currentMonitorTest(testArgs);
+	retVal = currentMonitorTest(&testArgs);
 	if(retVal != 0)
 	{
 		return (-1);

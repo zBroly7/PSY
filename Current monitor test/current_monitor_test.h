@@ -13,10 +13,13 @@
 #include "platform_internals.h"
 #include "platform_test.h"
 
+
 #define CSL_I2C_OWN_ADDR            (0x2F)
 
 #define CSL_I2C_SYS_CLK          	(100)
 #define CSL_I2C_BUS_FREQ         	(10)
+
+
 
  /**
   * \brief This function performs current minitor test

@@ -2026,7 +2026,7 @@ static TEST_STATUS msg_display_test_on_row1(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	C55x_msgWrite("\n\rDisplaying 'TI C5545 BP' on first row...\n\r");
+	C55x_msgWrite("\n\rDisplaying 'Cos tam' on first row...\n\r");
 
 	retVal = setline(0);
 	if (retVal != I2C_RET_OK)
@@ -2042,7 +2042,7 @@ static TEST_STATUS msg_display_test_on_row1(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	retVal = printstr("TI C5545 BP");
+	retVal = printstr("Cos tam");
 	if (retVal != I2C_RET_OK)
 	{
 		C55x_msgWrite("printstr: Oled print Failed\n\r");
@@ -2083,7 +2083,7 @@ static TEST_STATUS msg_display_test_on_row2(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	C55x_msgWrite("\n\rDisplaying 'TI C5545 BP' on second row...\n\r");
+	C55x_msgWrite("\n\rDisplaying 'Cos tam' on second row...\n\r");
 
 	retVal = setline(1);
 	if (retVal != I2C_RET_OK)
@@ -2099,7 +2099,7 @@ static TEST_STATUS msg_display_test_on_row2(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	retVal = printstr("TI C5545 BP");
+	retVal = printstr("Cos tam");
 	if (retVal != I2C_RET_OK)
 	{
 		C55x_msgWrite("printstr: Oled print Failed\n\r");
@@ -2140,8 +2140,8 @@ static TEST_STATUS msg_display_test_on_both_the_rows(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	C55x_msgWrite("\n\rDisplaying 'Texas Instruments' on first row and \n\r"
-			      "'C5545 BoosterPack' on the second row\n\n\r");
+	C55x_msgWrite("\n\rDisplaying 'Karol i Bartek' on first row and \n\r"
+			      "'BFF' on the second row\n\n\r");
 
 	//print two lines
 	retVal = setline(0);
@@ -2158,7 +2158,7 @@ static TEST_STATUS msg_display_test_on_both_the_rows(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	retVal = printstr("Texas Instruments");
+	retVal = printstr("Karol i Bartek");
 	if (retVal != I2C_RET_OK)
 	{
 		C55x_msgWrite("printstr: Oled print Failed\n\r");
@@ -2179,7 +2179,7 @@ static TEST_STATUS msg_display_test_on_both_the_rows(void *testArgs)
 		return (TEST_FAIL);
 	}
 
-	retVal = printstr("C5545 BoosterPack");
+	retVal = printstr("BFF");
 	if (retVal != I2C_RET_OK)
 	{
 		C55x_msgWrite("printstr: Oled print Failed\n\r");

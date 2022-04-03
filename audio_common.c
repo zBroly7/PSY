@@ -42,6 +42,8 @@
 
 CSL_I2sHandle   hI2s = 0;
 volatile Uint16  sw3Pressed = 0;
+volatile Uint16  sw3Pressed_reworked = 0;
+volatile Uint16  sw4Pressed = 0;
 
 /**
  *  \brief  GPIO Interrupt Service Routine
@@ -61,12 +63,42 @@ interrupt void gpioISR(void)
     /* Check for GPIO Interrupt Flag Register */
 	if((1 == GPIO_statusBit(gpioHandle,CSL_GPIO_PIN13,&retVal)))
     {
+	    C55x_msgWrite("SW3 is pressed\n\r");
         /* Clear GPIO Interrupt Flag Register */
         GPIO_clearInt(gpioHandle,CSL_GPIO_PIN13);
-        sw3Pressed = 1;
-    }
 
+        sw3Pressed_reworked = sw3Pressed_reworked + 1;
+
+        if(sw3Pressed_reworked%2==1 && sw4Pressed%2==1){
+            AIC3206_write( 12, 0x96 );
+        }
+        else if(sw3Pressed_reworked%2==1 && sw4Pressed%2==0){
+            AIC3206_write( 12, 0x93 );
+        }
+
+
+    }
+    /* Check for GPIO Interrupt Flag Register */
+    if((1 == GPIO_statusBit(gpioHandle,CSL_GPIO_PIN14,&retVal)))
+    {
+        C55x_msgWrite("SW4 is pressed\n\r");
+        /* Clear GPIO Interrupt Flag Register */
+        GPIO_clearInt(gpioHandle,CSL_GPIO_PIN14);
+        sw4Pressed = sw4Pressed + 1;
+
+        if(sw3Pressed_reworked%2==0 && sw4Pressed%2==1){
+                    AIC3206_write( 12, 0x90 );
+                }
+        else{
+             AIC3206_write( 12, 0x87 );
+        }
+    }
 	IRQ_clear(GPIO_EVENT);
+    IRQ_plug(GPIO_EVENT,&gpioISR);
+
+    /* Enabling Interrupt */
+    IRQ_enable(GPIO_EVENT);
+    IRQ_globalEnable();
 }
 
 TEST_STATUS gpio_interrupt_initiliastion(void)
@@ -109,23 +141,42 @@ TEST_STATUS gpio_interrupt_initiliastion(void)
     C55x_msgWrite("Press SW3 on the BoosterPack for exiting from the test\n\n\r");
 
     /** test GPIO_config API to make PIN13 as i/p */
-	config.pinNum    = CSL_GPIO_PIN13;
-    config.direction = CSL_GPIO_DIR_INPUT;
-    config.trigger   = CSL_GPIO_TRIG_RISING_EDGE;
-    retVal = GPIO_configBit(gpioHandle,&config);
-	if(CSL_SOK != retVal)
-	{
-		C55x_msgWrite("test failed - GPIO_configBit\n");
-	     return (TEST_FAIL);
-	}
+       config.pinNum    = CSL_GPIO_PIN13;
+       config.direction = CSL_GPIO_DIR_INPUT;
+       config.trigger   = CSL_GPIO_TRIG_RISING_EDGE;
+       retVal = GPIO_configBit(gpioHandle,&config);
+       if(CSL_SOK != retVal)
+       {
+           C55x_msgWrite("test failed - GPIO_configBit\n");
+            return (TEST_FAIL);
+       }
 
-	/* Enable GPIO interrupts */
-    retVal = GPIO_enableInt(gpioHandle,CSL_GPIO_PIN13);
-	if(CSL_SOK != retVal)
-	{
-		C55x_msgWrite("test failed- GPIO_enableInt\n");
-		return(retVal);
-	}
+       /** test GPIO_config API to make PIN14 as i/p */
+       config.pinNum    = CSL_GPIO_PIN14;
+       config.direction = CSL_GPIO_DIR_INPUT;
+       config.trigger   = CSL_GPIO_TRIG_RISING_EDGE;
+       retVal = GPIO_configBit(gpioHandle,&config);
+       if(CSL_SOK != retVal)
+       {
+           C55x_msgWrite("test failed - GPIO_configBit\n");
+            return (TEST_FAIL);
+       }
+
+       /* Enable GPIO interrupts */
+       retVal = GPIO_enableInt(gpioHandle,CSL_GPIO_PIN14);
+       if(CSL_SOK != retVal)
+       {
+           C55x_msgWrite("test failed- GPIO_enableInt\n");
+            return (TEST_FAIL);
+       }
+
+       /* Enable GPIO interrupts */
+       retVal = GPIO_enableInt(gpioHandle,CSL_GPIO_PIN13);
+       if(CSL_SOK != retVal)
+       {
+           C55x_msgWrite("test failed- GPIO_enableInt\n");
+           return(retVal);
+       }
 
 	/* Clear any pending Interrupt */
     IRQ_clear(GPIO_EVENT);

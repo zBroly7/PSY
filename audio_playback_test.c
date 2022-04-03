@@ -42,7 +42,7 @@
 #include "audio_common.h"
 
 extern TEST_STATUS audio_playback_test(void *testArgs);
-
+int freq_change = 0x90;
 /**
  *
  * \brief This function configures all audio codec registers for
@@ -133,12 +133,13 @@ static TEST_STATUS AIC3206_playback_config(void *testArgs)
 
     gpio_interrupt_initiliastion();
     /* Play Tone for 5 seconds*/
-    for ( sec = 0 ; sec < 5 ; sec++ )
+    for (;;)
     {
         for ( msec = 0 ; msec < 5000 ; msec++ )
         {
             for ( sample = 0 ; sample < 48 ; sample++ )
             {
+
                 /* Write 16-bit left channel Data */
                 I2S_writeLeft( sinetable[sample]);
 
